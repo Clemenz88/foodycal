@@ -1,6 +1,7 @@
 __pycache__/
 *.py[cod]
 .env
-# Ignore all .pt except in models folder
 *.pt
 !models/**/*.pt
+data/full_food_db.csv
+data/food_calories_full.csv

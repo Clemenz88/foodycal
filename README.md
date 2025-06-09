@@ -1,23 +1,20 @@
-# Madkalorie Estimator with Manual Hand Crop
+# Madkalorie Estimator med Stort Kaloriedatabase
 
-Dette er en Streamlit-app, der estimerer kalorier i mad ved at bruge en manuel hånd-crop til kalibrering.
+Denne Streamlit-app estimerer kalorier i mad på et billede ved hjælp af en manuel håndmarkering som reference og en omfattende fødevaredatabase.
 
 ## Kom godt i gang
 
-1. Clone dette repo.
+1. Clone eller download dette repo.
 2. Installer dependencies:
    ```
    pip install -r requirements.txt
    ```
-3. Læg din finetunede model i `models/food_model.pt`.
-4. Kør:
+3. Kør databasenedlaster:
+   ```
+   python download_db.py
+   ```
+4. Læg din finetunede model i `models/food_model.pt`.
+5. Kør appen:
    ```
    streamlit run app.py
    ```
-
-## Workflow
-
-1. Upload billede.
-2. Marker din hånd via cropper.
-3. App genkender mad-beholdere automatisk.
-4. Beregner volumen og kalorier.
