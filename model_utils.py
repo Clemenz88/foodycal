@@ -15,7 +15,7 @@ else:
     print(f"[Warning] food_model.pt ikke fundet, mad-genkendelse deaktiveret.")
 
 def detect_containers(img: Image.Image):
-    """Return liste af container-detektioner (bowl, plate, cup)."""
+    """Returnerer liste af container-detektioner (bowl, plate, cup)."""
     arr = np.array(img)
     res = model_general.predict(source=arr, verbose=False)[0]
     boxes = res.boxes.xyxy.cpu().numpy()
@@ -34,14 +34,18 @@ def detect_containers(img: Image.Image):
     return dets
 
 def detect_food_items(img: Image.Image, crop_boxes):
-    """Recognize foods with custom model if available."""
+    """Genkend madvarer og returner liste af dicts med navn og confidence."""
     if model_food is None:
         return []
+    arr = np.array(img)
     foods = []
     for box in crop_boxes:
         crop = img.crop((box['xmin'], box['ymin'], box['xmax'], box['ymax']))
         res = model_food.predict(source=np.array(crop), verbose=False)[0]
-        if res.boxes and len(res.boxes.cls) > 0:
-            cls = int(res.boxes.cls.cpu().numpy()[0])
-            foods.append(res.names[cls])
+        boxes = res.boxes.xyxy.cpu().numpy()
+        confs = res.boxes.conf.cpu().numpy()
+        classes = res.boxes.cls.cpu().numpy().astype(int)
+        names = [res.names[c] for c in classes]
+        for name, conf in zip(names, confs):
+            foods.append({'name': name, 'confidence': float(conf)})
     return foods

@@ -17,44 +17,59 @@ uploaded = st.file_uploader('Upload billede (.jpg/.png)', type=['jpg','png'])
 if uploaded:
     img = Image.open(uploaded).convert('RGB')
     st.image(img, caption='Original billede', use_column_width=True)
-
     st.write('**Step 1:** Marker din hånd i billedet.')
     box_img = st_cropper(img, realtime_update=True, box_color='#FF0000', aspect_ratio=None)
     if st.button('Bekræft håndmarkering'):
         st.session_state.hand_px_w = box_img.width
 
+# Efter håndbekræftelse
 if st.session_state.hand_px_w:
-    st.success(f"Håndbredde bekræftet: {st.session_state.hand_px_w}px")
+    hand_px = st.session_state.hand_px_w
+    st.success(f"Håndbredde bekræftet: {hand_px}px")
+    hand_cm = st.number_input('Håndbredde i cm', min_value=5.0, max_value=30.0, value=8.5)
 
-    # Detekter containers
+    # Detect containers
     containers = detect_containers(img)
-    # Beregn resultater
     results = []
-    confidences = []
+    container_confs = [c['confidence'] for c in containers]
+
+    # Beregn resultater for each container
     for c in containers:
-        confidences.append(c['confidence'])
-        vol = estimate_volume(st.session_state.hand_px_w, c, st.number_input('Håndbredde i cm', min_value=5.0, max_value=30.0, value=8.5, key='hand_cm'))
+        vol = estimate_volume(hand_px, c, hand_cm)
         foods = detect_food_items(img, [c])
         for f in foods:
-            kcal = lookup_calories(f, vol)
-            results.append((f, vol, kcal))
+            kcal = lookup_calories(f['name'], vol)
+            results.append({
+                'food': f['name'],
+                'food_conf': f['confidence'],
+                'volume_ml': vol,
+                'volume_conf': c['confidence'],
+                'calories': kcal or 0
+            })
 
-    # Vis resultater om nogen
+    # Vis resultater
     if results:
         st.header('Resultater')
-        for f, vol, kcal in results:
-            st.write(f'- **{f}**: {vol:.0f}ml → **{kcal:.0f}kcal**')
-    elif containers and min(confidences) < 0.75:
-        st.warning('Lav sikkerhed i genkendelse. Vælg venligst manuelt herunder.')
+        for r in results:
+            st.write(f"- **{r['food']}**: {r['volume_ml']:.0f} ml (sikkerhed: {r['volume_conf']*100:.0f}%), "
+                     f"madgenkendelse: {r['food_conf']*100:.0f}% → **{r['calories']:.0f} kcal**")
+    elif containers and min(container_confs) < 0.75:
+        st.warning('Lav sikkerhed i genkendelse (<75%). Overvej at bruge fallback nedenfor.')
     else:
         st.error('Ingen beholdere fundet.')
 
-    # Fallback vises kun efter resultater eller lav sikkerhed
-    if results or (containers and min(confidences) < 0.75):
+    # Fallback: kun vis hvis resultater eller lav sikkerhed
+    if results or (containers and min(container_confs) < 0.75):
         st.write('---')
         df = pd.read_csv('data/food_calories.csv')
-        fallback = st.selectbox('Fallback: vælg mad:', ['-- Ingenting --'] + df['food'].tolist())
-        fallback_vol = st.slider('Fallback volumen', 10, 1000, 100, key='fallback_vol')
-        if fallback != '-- Ingenting --':
-            kcal_fb = lookup_calories(fallback, fallback_vol)
-            st.info(f'Fallback: {fallback} ({fallback_vol}ml) → ~{kcal_fb:.0f}kcal')
+        options = df['food'].tolist()
+        manual = st.multiselect('Fallback: søg eller vælg madvarer manuelt', options)
+        manual_entries = []
+        for food in manual:
+            vol = st.number_input(f'Volume/vægt for {food} (ml/gram)', min_value=1, max_value=5000, value=100, key=f'vol_{food}')
+            kcal = lookup_calories(food, vol)
+            manual_entries.append((food, vol, kcal))
+        if manual_entries:
+            st.subheader('Manuelle indtastninger')
+            for food, vol, kcal in manual_entries:
+                st.write(f"- **{food}**: {vol} ml → **{kcal:.0f} kcal**")
