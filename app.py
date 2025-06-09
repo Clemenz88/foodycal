@@ -1,46 +1,45 @@
 import streamlit as st
 from PIL import Image
 import pandas as pd
-from model_utils import detect_objects, detect_food_items
+from streamlit_cropper import st_cropper
+from model_utils import detect_containers, detect_food_items
 from volume_estimation import estimate_volume
 from calorie_lookup import lookup_calories
 
-st.set_page_config(page_title="Madkalorie Estimator", layout="centered")
-st.title("📸 Madkalorie‐estimator med hånd‐reference")
+st.set_page_config(page_title='Madkalorie Estimator', layout='centered')
+st.title('📸 Madkalorie Estimator med Manuel Hand Crop')
 
-uploaded_file = st.file_uploader("Upload et billede (.jpg/.png) med din hånd som reference", type=["jpg","png"])
-hand_size = st.number_input("Håndbredde i cm (mål tværs over knoerne)", min_value=5.0, max_value=30.0, value=8.5, step=0.1)
+uploaded = st.file_uploader('Upload billede (.jpg/.png)', type=['jpg','png'])
+if uploaded:
+    img = Image.open(uploaded).convert('RGB')
+    st.image(img, caption='Original billede', use_column_width=True)
 
-df_cal = pd.read_csv("data/food_calories.csv")
-fallback_opts = ["-- Ingenting --"] + df_cal["food"].tolist()
-fallback = st.selectbox("Fallback: vælg madvare manuelt", fallback_opts)
-fallback_vol = st.slider("Volume/vægt for fallback (ml/gram)", min_value=10, max_value=1000, value=100)
+    st.write('**Step 1:** Marker din hånd i billedet.')
+    box_img = st_cropper(img, realtime_update=True, box_color='#FF0000', aspect_ratio=None)
+    hand_px_w = box_img.width
+    st.write(f'Hand pixel width: {hand_px_w}px')
 
-if uploaded_file:
-    img = Image.open(uploaded_file).convert("RGB")
-    st.image(img, caption="Uploaded billede", use_column_width=True)
+    st.write('**Step 2:** App genkender container-beholdere (bowl, plate, cup).')
+    containers = detect_containers(img)
+    st.write(f'Found {len(containers)} container(s).')
 
-    detections = detect_objects(img)
-    hand_boxes = [d for d in detections if d["name"] == "hand"]
-    if not hand_boxes:
-        st.error("Kunne ikke genkende hånden. Sørg for, at hånden er synlig.")
-    else:
-        hand_box = hand_boxes[0]
-        container_boxes = [d for d in detections if d["name"] in ["bowl","cup","plate"]]
-        results = []
-        for box in container_boxes:
-            vol = estimate_volume(hand_box, box, hand_size)
-            foods = detect_food_items(img, [box])
-            for food in foods:
-                kcal = lookup_calories(food, vol)
-                results.append((food, vol, kcal))
-        if results:
-            st.header("Resultater")
-            for food, vol, kcal in results:
-                st.write(f"- **{food}**: {vol:.0f} ml → ca. **{kcal:.0f} kcal**")
-        else:
-            st.warning("Ingen mad genkendt. Brug fallback nedenfor.")
+    results = []
+    if containers:
+        for c in containers:
+            vol = estimate_volume(hand_px_w, c, st.number_input('Håndbredde i cm', min_value=5.0, max_value=30.0, value=8.5))
+            foods = detect_food_items(img, [c])
+            for f in foods:
+                kcal = lookup_calories(f, vol)
+                results.append((f, vol, kcal))
+    if results:
+        st.header('Resultater')
+        for f, vol, kcal in results:
+            st.write(f'- **{f}**: {vol:.0f}ml → **{kcal:.0f}kcal**')
 
-if fallback != "-- Ingenting --":
-    kcal_fb = lookup_calories(fallback, fallback_vol)
-    st.info(f"Fallback: **{fallback}** ({fallback_vol} ml) → ca. **{kcal_fb:.0f} kcal**")
+    st.write('---')
+    df = pd.read_csv('data/food_calories.csv')
+    fallback = st.selectbox('Fallback: vælg mad:', ['-- Ingenting --']+df['food'].tolist())
+    fallback_vol = st.slider('Fallback volumen', 10, 1000, 100)
+    if fallback != '-- Ingenting --':
+        kcal_fb = lookup_calories(fallback, fallback_vol)
+        st.info(f'Fallback: {fallback} ({fallback_vol}ml) → ~{kcal_fb:.0f}kcal')

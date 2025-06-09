@@ -1,17 +1,10 @@
 import numpy as np
 
-def estimate_volume(hand_box, food_box, hand_real_width_cm):
-    """
-    Estimer volumen baseret på håndens bredde i cm.
-    """
-    # pixels to cm
-    hand_px = hand_box['xmax'] - hand_box['xmin']
-    px_to_cm = hand_real_width_cm / hand_px
-
-    w_px = food_box['xmax'] - food_box['xmin']
-    h_px = food_box['ymax'] - food_box['ymin']
+def estimate_volume(hand_pixel_width, box, hand_real_cm):
+    """Estimate volume given hand pixel width calibration and box."""
+    px_to_cm = hand_real_cm / hand_pixel_width
+    w_px = box['xmax'] - box['xmin']
+    h_px = box['ymax'] - box['ymin']
     w_cm, h_cm = w_px * px_to_cm, h_px * px_to_cm
-
-    # Forenklet prisme-model (cm3 = ml)
-    volume_ml = w_cm * w_cm * h_cm
-    return volume_ml
+    # assume prisme: cm^3 = ml
+    return w_cm * w_cm * h_cm

@@ -1,11 +1,11 @@
 import pandas as pd
 
-df_cal = pd.read_csv('data/food_calories.csv').set_index('food')
+df = pd.read_csv('data/food_calories.csv').set_index('food')
 
-def lookup_calories(food_name: str, volume_ml: float, density_g_per_ml=1.0):
-    mass_g = volume_ml * density_g_per_ml
+def lookup_calories(food, volume_ml):
+    g = volume_ml  # assume density=1
     try:
-        kcal_per_100g = df_cal.loc[food_name, 'kcal_per_100g']
+        kcal100 = df.loc[food, 'kcal_per_100g']
     except KeyError:
         return None
-    return mass_g * kcal_per_100g / 100
+    return g * kcal100 / 100

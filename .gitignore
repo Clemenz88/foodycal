@@ -1,6 +1,6 @@
 __pycache__/
 *.py[cod]
 .env
-# Ignore all .pt files except those in models/
+# Ignore all .pt except in models folder
 *.pt
 !models/**/*.pt
