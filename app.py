@@ -16,7 +16,7 @@ if 'hand_px_w' not in st.session_state:
 uploaded = st.file_uploader('Upload billede (.jpg/.png)', type=['jpg','png'])
 if uploaded:
     img = Image.open(uploaded).convert('RGB')
-    st.image(img, caption='Original billede', use_column_width=True)
+    st.image(img, caption='Original billede', use_container_width=True)
     st.write('**Step 1:** Marker din hånd i billedet.')
     box_img = st_cropper(img, realtime_update=True, box_color='#FF0000', aspect_ratio=None)
     if st.button('Bekræft håndmarkering'):
@@ -51,24 +51,38 @@ if st.session_state.hand_px_w:
     if results:
         st.header('Resultater')
         for r in results:
-            st.write(f"- **{r['food']}**: {r['volume_ml']:.0f} ml (sikkerhed: {r['volume_conf']*100:.0f}%), "
-                     f"madgenkendelse: {r['food_conf']*100:.0f}% → **{r['calories']:.0f} kcal**")
+            st.write(f"- **{r['food']}**: {r['volume_ml']:.0f} ml "
+                     f"(container-sikkerhed: {r['volume_conf']*100:.0f}%, "
+                     f"mad-sikkerhed: {r['food_conf']*100:.0f}%) → **{r['calories']:.0f} kcal**")
     elif containers and min(container_confs) < 0.75:
         st.warning('Lav sikkerhed i genkendelse (<75%). Overvej at bruge fallback nedenfor.')
     else:
         st.error('Ingen beholdere fundet.')
 
-    # Fallback: kun vis hvis resultater eller lav sikkerhed
+    # Fallback: vis efter resultater eller lav sikkerhed
     if results or (containers and min(container_confs) < 0.75):
         st.write('---')
         df = pd.read_csv('data/food_calories.csv')
-        options = df['food'].tolist()
-        manual = st.multiselect('Fallback: søg eller vælg madvarer manuelt', options)
+        st.subheader('Fallback: vælg eller tilføj madvarer manuelt')
+        # Søg i databasen
+        search = st.text_input('Søg i kalorie-databasen')
+        options = [food for food in df['food'] if search.lower() in food.lower()]
+        selected = st.multiselect('Vælg madvarer', options, key='fallback_select')
         manual_entries = []
-        for food in manual:
+        # Angiv volumen for valgte
+        for food in selected:
             vol = st.number_input(f'Volume/vægt for {food} (ml/gram)', min_value=1, max_value=5000, value=100, key=f'vol_{food}')
-            kcal = lookup_calories(food, vol)
+            kcal = lookup_calories(food, vol) or 0
             manual_entries.append((food, vol, kcal))
+        # Tilføj ny, ikke-eksisterende madvare
+        new_food = st.text_input('Eller tilføj ny madvare', key='new_food')
+        if new_food:
+            vol_new = st.number_input('Volume/vægt for ny madvare (ml/gram)', min_value=1, max_value=5000, value=100, key='vol_new')
+            if st.button('Tilføj ny madvare'):
+                kcal_new = lookup_calories(new_food, vol_new) or 0
+                manual_entries.append((new_food, vol_new, kcal_new))
+                st.success(f'Tilføjet {new_food}')
+        # Vis manuelle indtastninger
         if manual_entries:
             st.subheader('Manuelle indtastninger')
             for food, vol, kcal in manual_entries:
