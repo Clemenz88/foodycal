@@ -2,16 +2,12 @@ import os
 import numpy as np
 from ultralytics import YOLO
 from PIL import Image
-import mediapipe as mp
 
-# YOLOv8 general detection
+# YOLOv8 container detection
 model_general = YOLO('yolov8n.pt')
 
-# MediaPipe Hands
-mp_hands = mp.solutions.hands
-hands_detector = mp_hands.Hands(static_image_mode=True,
-                                max_num_hands=1,
-                                min_detection_confidence=0.5)
+# YOLO hand detection model
+model_hand = YOLO('ultralytics/handtrack')
 
 # Custom food detection model
 food_model_path = 'models/food_model.pt'
@@ -26,23 +22,19 @@ def detect_objects(img: Image.Image):
     img_array = np.array(img)
     detections = []
 
-    # Hand detection via MediaPipe
-    results = hands_detector.process(img_array)
-    if results.multi_hand_landmarks:
-        h, w, _ = img_array.shape
-        xs = [lm.x * w for lm in results.multi_hand_landmarks[0].landmark]
-        ys = [lm.y * h for lm in results.multi_hand_landmarks[0].landmark]
-        x_min, x_max = max(min(xs) - 10, 0), min(max(xs) + 10, w)
-        y_min, y_max = max(min(ys) - 10, 0), min(max(ys) + 10, h)
+    # Hand detection via YOLO handtrack
+    hand_res = model_hand.predict(source=img_array, verbose=False)[0]
+    if len(hand_res.boxes) > 0:
+        x1, y1, x2, y2 = hand_res.boxes.xyxy.cpu().numpy()[0]
         detections.append({
-            'xmin': float(x_min), 'ymin': float(y_min),
-            'xmax': float(x_max), 'ymax': float(y_max),
-            'confidence': 1.0,
-            'class': -1,
+            'xmin': float(x1), 'ymin': float(y1),
+            'xmax': float(x2), 'ymax': float(y2),
+            'confidence': float(hand_res.boxes.conf.cpu().numpy()[0]),
+            'class': int(hand_res.boxes.cls.cpu().numpy()[0]),
             'name': 'hand'
         })
 
-    # Container detection via YOLO
+    # Container detection via YOLO general
     yolo_res = model_general.predict(source=img_array, verbose=False)[0]
     boxes = yolo_res.boxes.xyxy.cpu().numpy()
     confs = yolo_res.boxes.conf.cpu().numpy()
@@ -61,7 +53,7 @@ def detect_objects(img: Image.Image):
     return detections
 
 def detect_food_items(img: Image.Image, crop_boxes):
-    """Genkend madvarer med det finetunede model, hvis tilgængelig."""
+    """Genkend madvarer med finetunet model, hvis tilgængelig."""
     if model_food is None:
         return []
     foods = []
