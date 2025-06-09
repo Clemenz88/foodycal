@@ -3,13 +3,21 @@ import numpy as np
 from ultralytics import YOLO
 from PIL import Image
 
+# YOLOv8 general container detection
 model_general = YOLO('yolov8n.pt')
+
+# Custom food detection model
 food_model_path = 'models/food_model.pt'
 if os.path.exists(food_model_path):
     model_food = YOLO(food_model_path)
 else:
     model_food = None
     print(f"[Warning] food_model.pt ikke fundet, mad-genkendelse deaktiveret.")
+
+# Zero-shot fallback classifier using HuggingFace Food101 model
+from transformers import pipeline
+
+food101_classifier = pipeline("image-classification", model="nateraw/food101", top_k=1)
 
 def detect_containers(img: Image.Image):
     arr = np.array(img)
@@ -26,14 +34,23 @@ def detect_containers(img: Image.Image):
     return dets
 
 def detect_food_items(img: Image.Image, crop_boxes):
-    if model_food is None:
-        return []
-    arr = np.array(img)
     results = []
-    for box in crop_boxes:
-        crop = img.crop((box['xmin'], box['ymin'], box['xmax'], box['ymax']))
-        res = model_food.predict(source=np.array(crop), verbose=False)[0]
-        for i, conf in enumerate(res.boxes.conf.cpu().numpy()):
-            name = res.names[int(res.boxes.cls.cpu().numpy()[i])]
-            results.append({'name': name, 'confidence': float(conf)})
+    # First try custom YOLO model if available
+    if model_food is not None:
+        arr = np.array(img)
+        for box in crop_boxes:
+            crop = img.crop((box['xmin'], box['ymin'], box['xmax'], box['ymax']))
+            res = model_food.predict(source=np.array(crop), verbose=False)[0]
+            for i, conf in enumerate(res.boxes.conf.cpu().numpy()):
+                name = res.names[int(res.boxes.cls.cpu().numpy()[i])]
+                results.append({'name': name, 'confidence': float(conf)})
+
+    # If no YOLO predictions, fallback to Food101 classifier
+    if not results:
+        for box in crop_boxes:
+            crop = img.crop((box['xmin'], box['ymin'], box['xmax'], box['ymax']))
+            # classifier expects PIL Image
+            cls = food101_classifier(crop)[0]
+            results.append({'name': cls['label'], 'confidence': float(cls['score'])})
+
     return results

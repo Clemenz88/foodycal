@@ -6,4 +6,4 @@ pandas
 scikit-learn
 ultralytics
 opencv-python-headless
-requests
+transformers
