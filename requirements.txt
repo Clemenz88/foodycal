@@ -1,9 +1,11 @@
-streamlit
-streamlit-cropper
-Pillow
-numpy
-pandas
-scikit-learn
-ultralytics
-opencv-python-headless
-transformers
+ streamlit
++torch
++torchvision
+ Pillow
+ numpy
+ pandas
+ scikit-learn
+ ultralytics
+ opencv-python-headless
+ streamlit-cropper
+ requests
